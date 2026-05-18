@@ -8,12 +8,12 @@
 
 | Day | Focus | Files to Study | Goal |
 |-----|-------|---------------|------|
-| **Day 1** | Transformers + LLMs | 02, 03 | Nail architecture questions |
-| **Day 2** | Fine-Tuning + LoRA + RLHF | 04 | Explain training end-to-end |
-| **Day 3** | RAG (full system) | 05 | Design a RAG system live |
-| **Day 4** | Optimization + Inference | 09, 10 | Talk about production bottlenecks |
-| **Day 5** | Deployment + Cloud | 11, 12 | Walk through a prod architecture |
-| **Day 6** | Deep Learning + NLP | 01, 06, 07 | Fill knowledge gaps |
+| **Day 1** | Transformers + LLMs | 04, 05 | Nail architecture questions |
+| **Day 2** | Fine-Tuning + LoRA + RLHF | 07 | Explain training end-to-end |
+| **Day 3** | RAG (full system) | 08 | Design a RAG system live |
+| **Day 4** | Optimization + Distributed Training | 10, 11 | Talk about production bottlenecks |
+| **Day 5** | Deployment + Cloud | 12, 13 | Walk through a prod architecture |
+| **Day 6** | Python + Deep Learning + NLP + Frameworks | 01, 02, 03, 06, 09 | Fill knowledge gaps |
 | **Day 7** | INTERVIEW_MASTERSHEET | INTERVIEW_MASTERSHEET.md | Full mock drill |
 
 ---
@@ -30,8 +30,8 @@
 
 ### 1-Hour Study Plan
 ```
-30 min → Read 02_transformers_attention.md (sections 1–6)
-15 min → Read 03_llm_models.md (sections 2–5)
+30 min → Read practical/04_transformers_attention/ files (attention, core concepts, modern improvements, mamba)
+15 min → Read practical/05_llm_models/ files (architectures, open-source models, reasoning models)
 15 min → Close everything, say all 6 answers out loud
 ```
 
@@ -49,7 +49,7 @@
 
 ### 1-Hour Study Plan
 ```
-40 min → Read 04_training_finetuning.md (sections 3–8)
+40 min → Read practical/07_fine_tuning/ files (sft_lora_qlora_rlhf, advanced PEFT)
 20 min → Practice explaining LoRA out loud with the formula
 ```
 
@@ -67,7 +67,7 @@
 
 ### 1-Hour Study Plan
 ```
-40 min → Read 05_rag.md completely
+40 min → Read practical/08_rag/ files (rag_fundamentals, advanced_rag, vector_db_internals)
 20 min → Draw the full RAG architecture from memory on paper
 ```
 
@@ -85,8 +85,8 @@
 
 ### 1-Hour Study Plan
 ```
-30 min → Read 09_model_optimization.md (sections 2, 5, 7)
-30 min → Read 10_distributed_training.md (sections 3–6)
+30 min → Read practical/10_model_optimization/quantization_pruning_distillation.md
+30 min → Read practical/11_distributed_training/distributed_training_zero_fsdp_parallelism.md
 ```
 
 ---
@@ -103,8 +103,8 @@
 
 ### 1-Hour Study Plan
 ```
-30 min → Read 11_model_deployment.md (sections 2–6)
-30 min → Read 12_cloud_platforms.md (sections 2–5)
+30 min → Read practical/12_deployment/production_deployment_vllm_serving.md
+30 min → Read practical/13_cloud/aws_gcp_azure_for_llms.md
 ```
 
 ---
@@ -121,9 +121,10 @@
 
 ### 1-Hour Study Plan
 ```
-20 min → Read 01_deep_learning.md (sections 3–6)
-20 min → Read 06_generative_ai_nlp.md (sections 3–7)
-20 min → Read 07_nlp_techniques.md (sections 1–3)
+15 min → Read practical/02_deep_learning/deep_learning_fundamentals.md
+15 min → Read practical/09_generative_ai/text_generation_sampling_hallucination.md & agents_function_calling_prompting.md
+15 min → Read practical/06_nlp_techniques/tokenization_bpe_wordpiece_sentencepiece.md
+15 min → Review Python & PyTorch libs in practical/01_python_libraries/ and practical/03_ml_frameworks/
 ```
 
 ---
