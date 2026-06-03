@@ -2,6 +2,8 @@
 
 > 1 week. Every topic from the JD. Production-level answers. No fluff.
 
+**Last reviewed:** 2026-06-03
+
 ---
 
 ## Daily Schedule (2–3 hours/day)
