@@ -1,0 +1,49 @@
+{
+  "_README": "Voice front-end for the EXISTING DHL AI Command Center. The voice platform (Vapi or Retell) only handles the live call — speech-to-text, turn-taking, text-to-speech. The BRAIN is your DHL_AI_Command_Center workflow, reached through its already-built omnichannel webhook. No duplicate tools. Set the Custom LLM / webhook URL to your Command Center's /webhook/dhl-omnichannel endpoint (via ngrok or n8n Cloud).",
+
+  "name": "DHL Voice Front-End — Robo",
+
+  "firstMessage": "Thanks for calling DHL! This is Robo. I can track a shipment, reschedule a delivery, book a pickup, or help with a damaged parcel. How can I help?",
+
+  "brain": {
+    "type": "command_center_webhook",
+    "url": "https://YOUR-N8N-URL/webhook/dhl-omnichannel",
+    "method": "POST",
+    "request_body_template": {
+      "message": "{{ the caller's transcribed words }}",
+      "channel": "voice",
+      "from": "{{ caller phone number or call id }}"
+    },
+    "read_reply_from_field": "output",
+    "note": "The Command Center does ALL the work: normalize -> triage router -> 5 specialist agents -> 12 tools -> reply. It already shortens replies when channel = voice. The voice platform just speaks back the 'output' field."
+  },
+
+  "voice": {
+    "provider": "11labs",
+    "voiceId": "REPLACE_WITH_AN_INDIAN_ENGLISH_VOICE_ID",
+    "stability": 0.5,
+    "similarityBoost": 0.75
+  },
+
+  "transcriber": {
+    "provider": "deepgram",
+    "model": "nova-2",
+    "language": "en-IN"
+  },
+
+  "fillerWhileThinking": "Let me check that for you, one moment...",
+  "silenceTimeoutSeconds": 20,
+  "maxDurationSeconds": 600,
+  "endCallMessage": "Thanks for calling DHL. Have a great day!",
+
+  "_HOW_TO_WIRE_IN_VAPI": [
+    "1. In Vapi, create an Assistant.",
+    "2. Set the Model to 'Custom LLM' and point its URL at your Command Center webhook (https://YOUR-N8N-URL/webhook/dhl-omnichannel).",
+    "3. Configure the request body to send { message, channel: 'voice', from } as above.",
+    "4. Set Voice = an Indian English 11labs voice; Transcriber = Deepgram nova-2, en-IN.",
+    "5. Set the First Message above.",
+    "6. Click 'Talk to Assistant' to test in the browser."
+  ],
+
+  "_RETELL_ALTERNATIVE": "In Retell, create an agent with a 'Custom LLM' webhook pointing at the same Command Center URL. Retell makes it easy to read a JSON field ('output') as the spoken reply."
+}

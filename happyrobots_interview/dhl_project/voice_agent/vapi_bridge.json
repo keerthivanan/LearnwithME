@@ -1,0 +1,73 @@
+{
+  "name": "Vapi Bridge — DHL Voice (OpenAI-compatible)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "vapi-llm",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "vb-webhook",
+      "name": "Vapi LLM In",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "vapi-llm-bridge"
+    },
+    {
+      "parameters": {
+        "jsCode": "const b=$input.first().json.body||$input.first().json;let u='';let f='vapi-caller';try{if(b.messages&&b.messages.length){for(let i=b.messages.length-1;i>=0;i--){if(b.messages[i].role==='user'){u=b.messages[i].content;break;}}}}catch(e){}if(!u&&b.message)u=b.message;try{if(b.call&&b.call.id)f=String(b.call.id);}catch(e){}if(!u)u='Hello';return [{json:{userMsg:u,from:f}}];"
+      },
+      "id": "vb-extract",
+      "name": "Extract Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://n8n.srv1520651.hstgr.cloud/webhook/dhl-omnichannel",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ message: $json.userMsg, channel: 'voice', from: $json.from }) }}",
+        "options": { "timeout": 60000 }
+      },
+      "id": "vb-http",
+      "name": "Call DHL Brain",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "let out='';try{out=$json.output||($json.body&&$json.body.output)||'';}catch(e){}if(!out)out='Sorry, I did not catch that. Could you say that again?';return [{json:{id:'chatcmpl-'+Date.now(),object:'chat.completion',created:Math.floor(Date.now()/1000),model:'dhl-brain',choices:[{index:0,message:{role:'assistant',content:out},finish_reason:'stop'}],usage:{prompt_tokens:0,completion_tokens:0,total_tokens:0}}}];"
+      },
+      "id": "vb-format",
+      "name": "Format OpenAI",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "vb-respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [880, 0]
+    }
+  ],
+  "connections": {
+    "Vapi LLM In": { "main": [[{"node": "Extract Message", "type": "main", "index": 0}]] },
+    "Extract Message": { "main": [[{"node": "Call DHL Brain", "type": "main", "index": 0}]] },
+    "Call DHL Brain": { "main": [[{"node": "Format OpenAI", "type": "main", "index": 0}]] },
+    "Format OpenAI": { "main": [[{"node": "Respond", "type": "main", "index": 0}]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

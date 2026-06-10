@@ -1,0 +1,492 @@
+{
+  "name": "DHL AI Command Center — Multi-Agent Customer & Ops Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 🚚 DHL AI COMMAND CENTER\n### One workflow that runs like a full DHL service + operations floor\n\n**HOW IT WORKS:**\nCustomer message in → the **Triage Router** (AI classifier) reads it and picks the right specialist → routes to one of **5 expert AI agents**, each with real DHL tools → agent resolves it end-to-end → response + audit log.\n\n**THE 5 AI WORKERS & THEIR TOOLS:**\n| Agent | Replaces | Tools |\n|-------|----------|-------|\n| 📦 Tracking & Status | L1 support reps | track_shipment, proof_of_delivery, proactive_guidance |\n| 📝 Booking & Quotes | Booking desk | recommend_service, rate_quote (volumetric), create_booking |\n| ⚠️ Claims & Complaints | Claims handlers | file_claim, compensation_policy |\n| 🛃 Customs Support | Customs ops team | customs_requirements, estimate_duties |\n| 🚛 Delivery Management | Dispatch reschedulers | reschedule, change_method |\n\n**SETUP (2 mins):**\n1. Click 🧠 'GPT Brain' node → add your OpenAI credential (only ONE for the whole system)\n2. Click 'Chat' at the bottom → start talking\n\n**TEST TRACKING #s:** 1234567890 (out for delivery) · 9876543210 (delivered, has POD) · 1111222233 (customs hold) · 5555666677 (weather delay) · 2222333344 (in transit) · 3333444455 (pickup booked)",
+        "height": 560,
+        "width": 560,
+        "color": 4
+      },
+      "id": "sticky-main-001",
+      "name": "📋 Command Center Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-1040, -160]
+    },
+    {
+      "parameters": {
+        "content": "### 🧪 DEMO SCRIPT — run in order\n\n**1. Tracking** →\n`Where is my package 1234567890?`\n\n**2. Memory** →\n`And when exactly will it arrive?`\n\n**3. Proof of Delivery** →\n`Package 9876543210 shows delivered but I didn't get it. Who signed?`\n\n**4. Booking (volumetric!)** →\n`Quote to ship 3 boxes, 6kg each, 40x30x25cm, Pune to Frankfurt, by Friday`\n\n**5. Claim** →\n`My package arrived broken, everything is damaged!`\n\n**6. Customs** →\n`Shipment 1111222233 stuck in customs. Who pays the duty?`\n\n**7. Delivery change** →\n`I missed delivery, can I collect from the DHL hub instead?`\n\n**8. Guardrail** →\n`How does DHL compare to FedEx?`",
+        "height": 560,
+        "width": 380,
+        "color": 6
+      },
+      "id": "sticky-demo-001",
+      "name": "🧪 Demo Script",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-440, -160]
+    },
+    {
+      "parameters": {
+        "content": "### 📡 OMNICHANNEL INTAKE\n\nThe SAME workflow serves every channel:\n\n| Channel | How it connects |\n|---------|----------------|\n| 💬 Chat | Chat Trigger (demo here) |\n| 📞 Voice | Twilio Voice → speech-to-text → POSTs SpeechResult to the webhook |\n| 📱 SMS / WhatsApp | Twilio → POSTs Body + From to the webhook |\n| ✉️ Email | Email gateway → POSTs message to the webhook |\n\nThe **Normalize** node turns all of them into one shape `{ chatInput, channel, customer_id }`, so the router + agents don't care which channel it came from.\n\nMemory keys on **customer_id**, so a customer's context follows them across voice → SMS → chat.\n\nWebhook URL (after activating):\n`POST /webhook/dhl-omnichannel`\nBody: `{ \"message\": \"...\", \"channel\": \"voice|sms|email\", \"from\": \"+91...\" }`",
+        "height": 460,
+        "width": 380,
+        "color": 5
+      },
+      "id": "sticky-channels-001",
+      "name": "📡 Omnichannel Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-1600, 420]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "node-chat-trigger",
+      "name": "💬 Chat Message In",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [-960, 460],
+      "webhookId": "dhl-command-center-chat"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dhl-omnichannel",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "node-webhook-omni",
+      "name": "📞 Voice / SMS / Email In",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-960, 700],
+      "webhookId": "dhl-omnichannel-in"
+    },
+    {
+      "parameters": {
+        "jsCode": "// OMNICHANNEL NORMALIZER — turns ANY channel into one shape: { chatInput, channel, customer_id }\n// Sources handled: web chat widget, Twilio Voice (SpeechResult), Twilio SMS (Body/From), email gateway (message/text)\nconst j = $input.first().json;\n\n// Path 1: Chat widget (LangChain Chat Trigger)\nif (j.chatInput !== undefined) {\n  return [{ json: { chatInput: j.chatInput, channel: 'chat', customer_id: j.sessionId || 'chat-user' } }];\n}\n\n// Path 2: Webhook from a channel gateway (voice / sms / email)\nconst b = j.body || j;\nlet channel = b.channel;\nif (!channel) {\n  if (b.SpeechResult || b.CallSid) channel = 'voice';      // Twilio Voice <Gather input=speech>\n  else if (b.Body || b.MessageSid) channel = 'sms';          // Twilio SMS / WhatsApp\n  else channel = 'email';                                     // email-to-webhook gateway\n}\nreturn [{ json: {\n  chatInput: b.message || b.SpeechResult || b.Body || b.text || '',\n  channel: channel,\n  customer_id: b.from || b.From || b.customer_id || b.email || 'unknown'\n}}];"
+      },
+      "id": "node-normalize",
+      "name": "🔀 Normalize Channel Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-700, 580]
+    },
+    {
+      "parameters": {
+        "inputText": "={{ $json.chatInput }}",
+        "categories": {
+          "categories": [
+            {
+              "category": "Tracking",
+              "description": "Customer wants to know where their shipment is, its status/location/ETA, why it's delayed, proof of delivery, who signed for it, or 'delivered but not received'. Any message with a tracking number for status."
+            },
+            {
+              "category": "Booking",
+              "description": "Customer wants to create a new shipment, book a pickup, get a rate/quote, or ask which DHL service to use to send a package."
+            },
+            {
+              "category": "Claims",
+              "description": "Customer reports a damaged shipment, lost/missing package, requests a refund or compensation, or makes a serious complaint needing resolution."
+            },
+            {
+              "category": "Customs",
+              "description": "Shipment held at customs, questions about customs documents, import duty/tax, who pays duty (Incoterms), clearance procedures, or required paperwork for international shipping."
+            },
+            {
+              "category": "Delivery",
+              "description": "Customer missed a delivery, wants to reschedule, change the delivery address, redirect to a DHL ServicePoint/hub, leave with a neighbour, or change how/when the package is delivered."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-triage",
+      "name": "🧭 Triage Router (AI)",
+      "type": "@n8n/n8n-nodes-langchain.textClassifier",
+      "typeVersion": 1,
+      "position": [-480, 560]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {
+          "temperature": 0.2,
+          "maxTokens": 700
+        }
+      },
+      "id": "node-shared-llm",
+      "name": "🧠 GPT Brain (shared)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [-560, 920]
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.customer_id }}",
+        "contextWindowLength": 15
+      },
+      "id": "node-shared-memory",
+      "name": "🧠 Shared Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [-340, 920]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}\n\n[Delivery channel: {{ $json.channel }}. If voice or sms, reply in 1-2 short spoken-style sentences — no markdown, no lists, no emojis. If voice, also spell out numbers naturally for text-to-speech.]",
+        "options": {
+          "systemMessage": "You are the DHL Tracking & Status Specialist — an AI Worker on the HappyRobots platform handling DHL's highest-volume query: 'where is my package?'\n\nTOOLS:\n- track_shipment: call this the instant a tracking number (10+ digits) appears. Never guess a status.\n- get_proof_of_delivery: call when a customer asks who signed, wants the POD, or says 'delivered but I didn't receive it'. Only works for DELIVERED shipments.\n- get_proactive_guidance: after tracking, use to tell the customer what happens next and what (if anything) they should do.\n\nHANDLING 'DELIVERED BUT NOT RECEIVED' (a top dispute type — do it properly):\n1. Pull the POD with get_proof_of_delivery — share the exact signatory name and delivery time.\n2. Ask them to check with reception/family/neighbours and the actual delivery location on the POD.\n3. If they still dispute after seeing the POD, tell them you're opening an investigation and connecting them to the claims team. Do NOT just dismiss it.\n\nRULES:\n- Never invent a status. If track_shipment returns found:false, ask the customer to verify the number from their shipping confirmation.\n- Never mention competitors (FedEx, UPS, Blue Dart as a competitor, Delhivery, DTDC, Amazon). If asked to compare, politely decline and offer DHL help only. (Note: Blue Dart is DHL Group's India domestic arm, not a competitor — never criticise it.)\n- Damage or confirmed loss → hand to the claims team, don't handle it yourself.\n- Keep replies to 2-3 warm, specific sentences. Always state the tracking number and exact status. Reply in the customer's language (English/Hindi/Tamil)."
+        }
+      },
+      "id": "node-agent-tracking",
+      "name": "📦 Tracking & Status Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [140, -240]
+    },
+    {
+      "parameters": {
+        "name": "track_shipment",
+        "description": "Look up a DHL shipment by tracking number. Returns live status, location, ETA, service, route, weight and last scan event. ALWAYS call when a tracking number is present.",
+        "language": "javaScript",
+        "jsCode": "const t = String($fromAI('tracking_number','The DHL tracking number from the customer')).trim().replace(/\\s+/g,'');\nconst db = {\n '1234567890':{status:'WITH DELIVERY COURIER',scan:'Out for delivery',loc:'Chennai Gateway, Tamil Nadu, IN',eta:'Today by 20:00',svc:'DHL Express Worldwide',from:'Mumbai, IN',to:'Chennai, IN',wt:'2.3 kg',last:'08:30 With delivery courier — vehicle TN-07-1123'},\n '9876543210':{status:'DELIVERED',scan:'Delivered - signed for',loc:'Andheri East, Mumbai, IN',eta:'Delivered 08 Jun 14:45',svc:'DHL eCommerce',from:'New Delhi, IN',to:'Mumbai, IN',wt:'0.8 kg',last:'14:45 Delivered, signed by P. SHARMA',pod:true},\n '1111222233':{status:'CUSTOMS STATUS UPDATED',scan:'Clearance processing — documents required',loc:'Delhi Customs, IGI Airport, IN',eta:'Held — 2-3 working days after clearance',svc:'DHL Express Worldwide',from:'Frankfurt, DE',to:'New Delhi, IN',wt:'5.1 kg',last:'09:00 On hold — commercial invoice required',incoterm:'DAP (receiver pays duty)'},\n '5555666677':{status:'SHIPMENT ON HOLD',scan:'Delay — adverse weather',loc:'Bengaluru Gateway, Karnataka, IN',eta:'Revised: 12 Jun',svc:'DHL Express Worldwide',from:'Hyderabad, IN',to:'Coimbatore, IN',wt:'1.4 kg',last:'16:00 Held — regional weather advisory'},\n '2222333344':{status:'IN TRANSIT',scan:'Departed DHL facility',loc:'Mumbai Gateway, IN',eta:'11 Jun by 18:00',svc:'DHL Express Worldwide',from:'Pune, IN',to:'Bengaluru, IN',wt:'3.2 kg',last:'23:20 Departed facility — Mumbai Gateway'},\n '3333444455':{status:'SHIPMENT PICKED UP',scan:'Collection booked',loc:'Hyderabad, IN (origin)',eta:'Est. delivery 13-14 Jun',svc:'DHL Express Worldwide',from:'Hyderabad, IN',to:'Chennai, IN',wt:'0.5 kg',last:'Pickup window 14:00-18:00 today'}\n};\nconst r = db[t];\nif(!r) return JSON.stringify({found:false,tracking_number:t,message:'No tracking data found. Ask the customer to verify the number from their DHL shipping confirmation (DHL Express waybills are 10 digits).'});\nconst out={found:true,tracking_number:t,status:r.status,latest_scan:r.scan,current_location:r.loc,estimated_delivery:r.eta,service:r.svc,origin:r.from,destination:r.to,weight:r.wt,last_event:r.last};\nif(r.incoterm) out.incoterm=r.incoterm;\nif(r.pod) out.pod_available=true;\nreturn JSON.stringify(out);"
+      },
+      "id": "node-tool-track",
+      "name": "🔧 track_shipment",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [460, -420]
+    },
+    {
+      "parameters": {
+        "name": "get_proof_of_delivery",
+        "description": "Retrieve Proof of Delivery (signatory name, delivery date/time, location) for a DELIVERED shipment. Use when customer asks who signed, wants the POD, or disputes a delivery.",
+        "language": "javaScript",
+        "jsCode": "const t = String($fromAI('tracking_number','Tracking number of a delivered shipment')).trim().replace(/\\s+/g,'');\nconst pods = {\n '9876543210':{signatory:'P. SHARMA',delivered_at:'08 Jun 2025, 14:45',location:'Front desk / reception, Andheri East, Mumbai',pod_image:'https://dhl.com/pod/9876543210.pdf',geotag:'19.1136 N, 72.8697 E'}\n};\nconst p = pods[t];\nif(!p) return JSON.stringify({pod_available:false,tracking_number:t,message:'No POD available — this shipment is not marked Delivered yet, so there is no signature on file.'});\nreturn JSON.stringify({pod_available:true,tracking_number:t,signed_by:p.signatory,delivered_at:p.delivered_at,delivery_location:p.location,pod_document:p.pod_image,gps_geotag:p.geotag,note:'If the customer does not recognise the signatory or location, open an investigation and route to the claims team.'});"
+      },
+      "id": "node-tool-pod",
+      "name": "🔧 proof_of_delivery",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [640, -420]
+    },
+    {
+      "parameters": {
+        "name": "get_proactive_guidance",
+        "description": "Given a shipment status, return helpful next-step guidance for the customer. Use after tracking to be proactive.",
+        "language": "javaScript",
+        "jsCode": "const s = String($fromAI('status','The shipment status, e.g. CUSTOMS STATUS UPDATED, SHIPMENT ON HOLD, WITH DELIVERY COURIER')).toUpperCase();\nconst g = {\n 'WITH DELIVERY COURIER':'Ensure someone is available at the address to receive and sign. No other action needed.',\n 'DELIVERED':'If not physically received, check reception/neighbours and the POD location first; then we can investigate.',\n 'CUSTOMS STATUS UPDATED':'Have your commercial invoice and ID ready. Customs may request duty payment. Submit any requested document fast to avoid delay.',\n 'SHIPMENT ON HOLD':'No action needed. The delivery date auto-updates and you will be notified when it moves again.',\n 'IN TRANSIT':'Moving normally. Check again near the ETA for delivery-day updates.',\n 'SHIPMENT PICKED UP':'Keep the package labelled and ready; the agent will collect in the pickup window.'\n};\nreturn JSON.stringify({status:s,guidance:g[s]||'Shipment is progressing normally; no action needed right now.'});"
+      },
+      "id": "node-tool-guidance",
+      "name": "🔧 proactive_guidance",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [460, -220]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}\n\n[Delivery channel: {{ $json.channel }}. If voice or sms, reply in 1-2 short spoken-style sentences — no markdown, no lists, no emojis. If voice, also spell out numbers naturally for text-to-speech.]",
+        "options": {
+          "systemMessage": "You are the DHL Booking & Quotes Specialist — an AI Worker that replaces the booking desk. You help B2B account customers and retail customers create shipments fast and accurately.\n\nTOOLS:\n- recommend_service: suggest the right DHL service from destination, weight and timeline.\n- get_rate_quote: price a shipment. DHL charges on CHARGEABLE weight = the greater of actual weight vs volumetric weight, so you MUST collect dimensions (L×W×H in cm) AND actual weight before quoting. Never quote on actual weight alone.\n- create_booking: ONLY once you have pickup address, delivery address, actual weight, dimensions, pieces, contents, receiver email, AND for B2B a 9-digit DHL account number. International shipments also need Incoterm (DDP = sender pays duty, DAP = receiver pays) and declared value.\n\nRULES:\n- Always collect dimensions — explain that DHL prices on volumetric weight (L×W×H÷5000) when it exceeds actual weight. This is the single most important pricing rule.\n- For B2B, ask for the DHL account number (billing). For retail/cash, note prepaid.\n- International: capture contents description, declared value, and the Incoterm (DDP or DAP).\n- Screen for restricted/prohibited items (cash, currency, gold/precious metals, weapons, narcotics, perishables, loose lithium batteries). If found, do NOT book — explain it's restricted and route to a specialist.\n- Dangerous goods (chemicals, flammables, batteries): do NOT book — connect to the dangerous-goods specialist.\n- Never mention competitors. Summarise collected details as bullets before calling create_booking, then confirm tracking number + pickup window."
+        }
+      },
+      "id": "node-agent-booking",
+      "name": "📝 Booking & Quotes Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [140, 240]
+    },
+    {
+      "parameters": {
+        "name": "recommend_service",
+        "description": "Recommend the best DHL service from destination country, total weight (kg) and days available. Note: DHL Group's India domestic arm is Blue Dart.",
+        "language": "javaScript",
+        "jsCode": "const dest = String($fromAI('destination_country','Destination country'));\nconst wt = parseFloat($fromAI('weight_kg','Total chargeable weight in kg')||'1');\nconst days = parseInt($fromAI('days_required','Business days available for delivery')||'5');\nconst intl = !['India','IN','india'].includes(dest);\nconst s=[];\nif(intl){\n if(days<=1) s.push({service:'DHL Express 9:00 / 12:00',transit:'Next possible day by 09:00 or 12:00',note:'Time-definite premium'});\n if(days<=3) s.push({service:'DHL Express Worldwide',transit:'1-3 business days',note:'Standard international express — most used'});\n if(days<=6) s.push({service:'DHL Economy Select',transit:'2-6 business days',note:'Deferred, lower cost for non-urgent'});\n if(wt>70) s.push({service:'DHL Global Forwarding',transit:'Air/ocean freight',note:'Heavy/bulk cargo — custom quote'});\n s.push({service:'DHL eCommerce',transit:'4-10 business days',note:'Lowest cost for e-commerce parcels'});\n}else{\n s.push({service:'Blue Dart (DHL Group) Domestic Priority',transit:'1-2 business days',note:'DHL Group India domestic express'});\n s.push({service:'Blue Dart Surface',transit:'2-5 business days',note:'Cost-effective domestic'});\n s.push({service:'DHL eCommerce India',transit:'3-6 business days',note:'Parcel/e-commerce'});\n}\nreturn JSON.stringify({destination:dest,weight_kg:wt,days_available:days,recommended:s,top_pick:s[0],note:'For India domestic, DHL Group ships via Blue Dart. Final service depends on serviceability of the pincode.'});"
+      },
+      "id": "node-tool-recommend",
+      "name": "🔧 recommend_service",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [460, 140]
+    },
+    {
+      "parameters": {
+        "name": "get_rate_quote",
+        "description": "Estimate DHL price using CHARGEABLE weight = greater of actual weight vs volumetric weight. Provide actual_weight_kg, dimensions (length_cm,width_cm,height_cm), pieces, and whether international.",
+        "language": "javaScript",
+        "jsCode": "const actual = parseFloat($fromAI('actual_weight_kg','Actual weight per shipment in kg')||'1');\nconst L = parseFloat($fromAI('length_cm','Length in cm per piece')||'0');\nconst W = parseFloat($fromAI('width_cm','Width in cm per piece')||'0');\nconst H = parseFloat($fromAI('height_cm','Height in cm per piece')||'0');\nconst pieces = parseInt($fromAI('pieces','Number of pieces')||'1');\nconst intl = String($fromAI('international','true if international else false')||'true')==='true';\n// DHL volumetric weight formula: (L x W x H) / 5000 in cm, per piece\nconst volPerPiece = (L*W*H)/5000;\nconst volTotal = Math.round(volPerPiece*pieces*100)/100;\nconst chargeable = Math.max(actual, volTotal);\nconst basis = volTotal>actual ? 'VOLUMETRIC (dimensions exceed actual weight)' : 'ACTUAL weight';\nlet base = intl?30:6; let perKg = intl?6.5:2.5; const cur = intl?'USD':'INR'; const mult = intl?1:80;\nconst est = (base + perKg*chargeable)*mult;\nconst low = Math.round(est*0.85); const high = Math.round(est*1.3);\nreturn JSON.stringify({actual_weight_kg:actual,volumetric_weight_kg:volTotal,chargeable_weight_kg:chargeable,charged_on:basis,currency:cur,estimate_range:cur+' '+low+' - '+high,important:'DHL bills on chargeable weight ('+chargeable+' kg here), not actual. Fuel surcharge, remote-area and duties (if DAP) are extra. Estimate only.'});"
+      },
+      "id": "node-tool-quote",
+      "name": "🔧 get_rate_quote",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [640, 140]
+    },
+    {
+      "parameters": {
+        "name": "create_booking",
+        "description": "Create a DHL booking once ALL details collected: pickup address, delivery address, actual weight, dimensions, pieces, contents, receiver email, account number (B2B), and for international the Incoterm + declared value. Screens restricted items. Returns booking ref + tracking number.",
+        "language": "javaScript",
+        "jsCode": "const pickup=String($fromAI('pickup_address','Full pickup address'));\nconst delivery=String($fromAI('delivery_address','Full delivery address'));\nconst wt=$fromAI('weight_kg','Actual total weight kg');\nconst pieces=$fromAI('pieces','Number of pieces');\nconst contents=String($fromAI('contents','Contents description'));\nconst svc=$fromAI('service','DHL service selected');\nconst email=$fromAI('receiver_email','Receiver email');\nconst account=String($fromAI('account_number','9-digit DHL account number for B2B, or PREPAID for cash')||'PREPAID');\nconst incoterm=String($fromAI('incoterm','DDP or DAP for international, or DOMESTIC')||'DOMESTIC');\n// Restricted-items screen\nconst banned=['cash','currency','gold','silver','precious metal','weapon','gun','ammunition','narcotic','drug','perishable','loose lithium','lithium battery only'];\nconst c=contents.toLowerCase();\nconst hit=banned.find(b=>c.includes(b));\nif(hit){return JSON.stringify({success:false,blocked:true,reason:'Contents appear to include a restricted/prohibited item (\"'+hit+'\"). This cannot be booked automatically. Route the customer to a DHL restricted-goods specialist.'});}\nconst ref='DHL-BK-'+Date.now().toString().slice(-8);\nconst tn=Math.floor(Math.random()*9000000000+1000000000).toString();\nreturn JSON.stringify({success:true,booking_reference:ref,tracking_number:tn,service:svc,billing_account:account,incoterm:incoterm,pickup:pickup,delivery:delivery,pieces:pieces,actual_weight_kg:wt,contents:contents,pickup_window:'10:00-14:00 (book before 14:00 for same-day pickup)',next_steps:['Label emailed to '+email+' within 30 mins','Attach label before pickup','Track at dhl.com using '+tn]});"
+      },
+      "id": "node-tool-booking",
+      "name": "🔧 create_booking",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [460, 340]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}\n\n[Delivery channel: {{ $json.channel }}. If voice or sms, reply in 1-2 short spoken-style sentences — no markdown, no lists, no emojis. If voice, also spell out numbers naturally for text-to-speech.]",
+        "options": {
+          "systemMessage": "You are the DHL Claims & Complaints Specialist — an AI Worker handling the most sensitive cases: damage, loss, and refunds. Priority is EMPATHY first, resolution second.\n\nTOOLS:\n- file_claim: log a damage/loss claim. Returns a claim reference and routes to the right human team.\n- get_compensation_policy: explain what compensation/insurance applies.\n\nRULES:\n- ALWAYS open with genuine empathy before anything else.\n- You CANNOT approve money or promise specific compensation amounts — DHL liability is capped and assessed by a human. You file the claim and connect them to a specialist.\n- Collect: tracking number, what went wrong, date noticed, and (for damage) whether they kept the packaging and have photos. Tell damage customers to RETAIN the item and packaging — DHL may need to inspect it.\n- DHL claim windows are time-bound (typically report damage within 7 days of delivery) — capture the dates so the claim isn't time-barred.\n- After filing, give the claim reference, the assigned team, and a clear next step + timeline.\n- Never blame the customer, never minimise, never mention competitors."
+        }
+      },
+      "id": "node-agent-claims",
+      "name": "⚠️ Claims & Complaints Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [140, 680]
+    },
+    {
+      "parameters": {
+        "name": "file_claim",
+        "description": "File a damage or loss claim. Provide tracking number, issue type (damage/loss), description, and date noticed. Returns claim reference and assigned team.",
+        "language": "javaScript",
+        "jsCode": "const tn=String($fromAI('tracking_number','Tracking number')||'UNKNOWN');\nconst type=String($fromAI('issue_type','damage or loss')||'damage').toLowerCase();\nconst desc=String($fromAI('description','What went wrong')||'');\nconst noticed=String($fromAI('date_noticed','When the issue was noticed')||'today');\nconst ref='DHL-CLAIM-'+Date.now().toString().slice(-7);\nconst team=type.includes('loss')?'Trace & Investigations Team':'Claims & Damage Team';\nreturn JSON.stringify({claim_filed:true,claim_reference:ref,tracking_number:tn,issue_type:type,date_noticed:noticed,assigned_team:team,escalated_to_human:true,sla:'A specialist will contact you within 24 hours',customer_next_step: type.includes('damage')?'RETAIN the damaged item and all original packaging — do not discard. Have clear photos ready for the inspector.':'Our investigations team will open a trace and update you within 24 hours; keep your shipping documents handy.'});"
+      },
+      "id": "node-tool-claim",
+      "name": "🔧 file_claim",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [460, 600]
+    },
+    {
+      "parameters": {
+        "name": "get_compensation_policy",
+        "description": "Explain DHL compensation/liability policy for damage or loss.",
+        "language": "javaScript",
+        "jsCode": "const type=String($fromAI('issue_type','damage or loss')||'damage').toLowerCase();\nconst insured=String($fromAI('insurance_purchased','true if Shipment Value Protection was bought')||'false')==='true';\nconst base={damage:'Damage is assessed after inspection of the item and packaging. Without Shipment Value Protection, DHL standard liability is capped by international convention (broadly ~USD 20-25/kg for Express). With Shipment Value Protection, cover is up to the insured/declared value.',loss:'Confirmed loss is compensated based on declared/insured value if Shipment Value Protection was purchased; otherwise capped at standard liability by weight. A trace runs up to ~8 working days before loss is confirmed.'};\nreturn JSON.stringify({issue_type:type,shipment_value_protection:insured,policy:base[type]||base.damage,important:'Final amount is decided by the human claims specialist after assessment. This is general policy guidance only.'});"
+      },
+      "id": "node-tool-comp",
+      "name": "🔧 compensation_policy",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [640, 600]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}\n\n[Delivery channel: {{ $json.channel }}. If voice or sms, reply in 1-2 short spoken-style sentences — no markdown, no lists, no emojis. If voice, also spell out numbers naturally for text-to-speech.]",
+        "options": {
+          "systemMessage": "You are the DHL Customs Support Specialist — an AI Worker handling international shipments stuck at customs and all customs paperwork. This work normally ties up a whole ops team.\n\nTOOLS:\n- get_customs_requirements: list exactly which documents are needed and how to submit them.\n- estimate_duties: estimate India import duty/tax (BCD + Social Welfare Surcharge + IGST).\n\nKEY CONCEPT — INCOTERMS (who pays the duty):\n- DDP (Delivered Duty Paid): the SENDER pays duties and taxes. Receiver pays nothing.\n- DAP (Delivered At Place): the RECEIVER pays duties and taxes before release. Most Express parcels default to DAP.\nAlways clarify which applies — it's the customer's most common customs question.\n\nRULES:\n- Be precise and reassuring — customs delays stress customers.\n- State exactly what document is missing, what it must contain, and how to send it.\n- For duty questions, give an estimate and stress the final amount is set by Indian customs authorities based on HS code.\n- If a shipment has been held more than 5 working days, advise you'll escalate to a human customs broker.\n- Never mention competitors."
+        }
+      },
+      "id": "node-agent-customs",
+      "name": "🛃 Customs Support Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [140, 1120]
+    },
+    {
+      "parameters": {
+        "name": "get_customs_requirements",
+        "description": "Return the customs documents required and how to submit them. Provide a document name or 'general'. Explains Incoterm responsibility.",
+        "language": "javaScript",
+        "jsCode": "const doc=String($fromAI('document','Document name or general')||'general').toLowerCase();\nconst reqs={\n 'commercial invoice':'Must include: sender & receiver details, full item descriptions, quantities, unit values, total value, currency and HS codes. The single most-requested customs document.',\n 'packing list':'Itemised list: descriptions, quantities, weights and dimensions per box.',\n 'certificate of origin':'Issued and stamped by the Chamber of Commerce in the origin country. Determines preferential duty under trade agreements.',\n 'import license / iec':'India importers need a valid Importer Exporter Code (IEC). For restricted goods, the relevant import licence number.',\n 'kyc':'For India customs clearance, the receiver KYC (ID + address proof) is often required for personal imports.',\n 'msds':'Material Safety Data Sheet for chemicals/dangerous goods, with hazard classifications.'\n};\nif(reqs[doc]) return JSON.stringify({document:doc,requirement:reqs[doc],submit_to:'Reply to your DHL customs email with the document attached (PDF/scan)',clears_in:'1-3 working days after we receive it',duty_note:'If the shipment is DAP, the receiver pays duty before release; if DDP, the sender has already covered it.'});\nreturn JSON.stringify({document:'general',common_docs:Object.keys(reqs),note:'For most India imports: Commercial Invoice + receiver KYC + (for businesses) IEC. Tell me what the shipment is and I will confirm exactly what you need.',incoterm_reminder:'Clarify DDP vs DAP so the customer knows whether they owe duty.'});"
+      },
+      "id": "node-tool-customsreq",
+      "name": "🔧 customs_requirements",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [460, 1040]
+    },
+    {
+      "parameters": {
+        "name": "estimate_duties",
+        "description": "Estimate India import charges = Basic Customs Duty + Social Welfare Surcharge + IGST. Provide declared/assessable value (number), currency, and optionally bcd_rate and igst_rate as percentages.",
+        "language": "javaScript",
+        "jsCode": "const val=parseFloat($fromAI('declared_value','Assessable/declared value of goods')||'0');\nconst cur=String($fromAI('currency','Currency e.g. USD/INR')||'USD');\nconst bcdRate=parseFloat($fromAI('bcd_rate','Basic Customs Duty rate percent, default 10')||'10')/100;\nconst igstRate=parseFloat($fromAI('igst_rate','IGST rate percent, default 18')||'18')/100;\n// India import duty stack\nconst bcd=val*bcdRate;\nconst sws=bcd*0.10; // Social Welfare Surcharge = 10% of BCD\nconst igstBase=val+bcd+sws;\nconst igst=igstBase*igstRate;\nconst total=bcd+sws+igst;\nconst r=n=>Math.round(n*100)/100;\nreturn JSON.stringify({assessable_value:val,currency:cur,basic_customs_duty:r(bcd),social_welfare_surcharge:r(sws),igst:r(igst),total_import_charges:r(total),effective_rate_pct:r((total/val)*100),breakdown:'BCD '+(bcdRate*100)+'% + SWS 10% of BCD + IGST '+(igstRate*100)+'% on (value+BCD+SWS)',disclaimer:'Estimate only. Final duty is set by Indian customs based on the HS code classification and current tariff.'});"
+      },
+      "id": "node-tool-duties",
+      "name": "🔧 estimate_duties",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [640, 1040]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}\n\n[Delivery channel: {{ $json.channel }}. If voice or sms, reply in 1-2 short spoken-style sentences — no markdown, no lists, no emojis. If voice, also spell out numbers naturally for text-to-speech.]",
+        "options": {
+          "systemMessage": "You are the DHL Delivery Management Specialist — an AI Worker handling missed deliveries and delivery changes (DHL 'On Demand Delivery'). Every failed re-attempt costs DHL money, so resolving this in one exchange saves real cost.\n\nTOOLS:\n- reschedule_delivery: book a new delivery attempt.\n- change_delivery_method: switch to ServicePoint/hub pickup, neighbour delivery, or a new address.\n\nRULES:\n- Offer clear choices: (1) re-attempt delivery, (2) collect from nearest DHL ServicePoint/hub, (3) leave with a neighbour, or (4) change the address.\n- Confirm the tracking number first.\n- Neighbour drop → capture the neighbour's name/flat. Address change → capture the full new address (and note an address change to a different city/country may change duty/charges).\n- DHL holds undelivered parcels at the ServicePoint for ~5 working days before returning to sender — mention this for hub pickup.\n- Be quick and friendly. Never mention competitors."
+        }
+      },
+      "id": "node-agent-delivery",
+      "name": "🚛 Delivery Management Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [140, 1560]
+    },
+    {
+      "parameters": {
+        "name": "reschedule_delivery",
+        "description": "Reschedule a delivery attempt. Provide tracking number and preferred date.",
+        "language": "javaScript",
+        "jsCode": "const tn=String($fromAI('tracking_number','Tracking number')||'UNKNOWN');\nconst date=String($fromAI('preferred_date','Preferred delivery date')||'next business day');\nreturn JSON.stringify({rescheduled:true,tracking_number:tn,new_delivery_date:date,window:'09:00-18:00',confirmation:'Re-attempt booked for '+date+'. The customer will get an SMS on delivery day with a tighter time window.'});"
+      },
+      "id": "node-tool-reschedule",
+      "name": "🔧 reschedule_delivery",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [460, 1480]
+    },
+    {
+      "parameters": {
+        "name": "change_delivery_method",
+        "description": "Change delivery method. Provide tracking number and method (hub_pickup, neighbour, or address_change) plus details.",
+        "language": "javaScript",
+        "jsCode": "const tn=String($fromAI('tracking_number','Tracking number')||'UNKNOWN');\nconst method=String($fromAI('method','hub_pickup, neighbour or address_change')||'hub_pickup').toLowerCase();\nconst details=String($fromAI('details','Neighbour name/flat or new full address if applicable')||'');\nconst out={tracking_number:tn,method:method};\nif(method.includes('hub')||method.includes('service')){out.result='Redirected to the nearest DHL ServicePoint. Bring the tracking number and a photo ID. Held for 5 working days, then returned to sender.';}\nelse if(method.includes('neigh')){out.result='Authorised to leave with neighbour: '+details+'. Customer will be notified once delivered.';}\nelse{out.result='Delivery address updated to: '+details+'. Note: a change of city/country can affect transit time and any applicable duty.';}\nreturn JSON.stringify(out);"
+      },
+      "id": "node-tool-changemethod",
+      "name": "🔧 change_delivery_method",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [640, 1480]
+    },
+    {
+      "parameters": {
+        "includeOtherFields": true,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "output",
+              "value": "={{ $json.output }}",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "audit_handled_at",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-audit",
+      "name": "📊 Response + Audit Log",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [940, 680]
+    }
+  ],
+  "connections": {
+    "💬 Chat Message In": {
+      "main": [[{"node": "🔀 Normalize Channel Input", "type": "main", "index": 0}]]
+    },
+    "📞 Voice / SMS / Email In": {
+      "main": [[{"node": "🔀 Normalize Channel Input", "type": "main", "index": 0}]]
+    },
+    "🔀 Normalize Channel Input": {
+      "main": [[{"node": "🧭 Triage Router (AI)", "type": "main", "index": 0}]]
+    },
+    "🧭 Triage Router (AI)": {
+      "main": [
+        [{"node": "📦 Tracking & Status Agent", "type": "main", "index": 0}],
+        [{"node": "📝 Booking & Quotes Agent", "type": "main", "index": 0}],
+        [{"node": "⚠️ Claims & Complaints Agent", "type": "main", "index": 0}],
+        [{"node": "🛃 Customs Support Agent", "type": "main", "index": 0}],
+        [{"node": "🚛 Delivery Management Agent", "type": "main", "index": 0}]
+      ]
+    },
+    "🧠 GPT Brain (shared)": {
+      "ai_languageModel": [[
+        {"node": "🧭 Triage Router (AI)", "type": "ai_languageModel", "index": 0},
+        {"node": "📦 Tracking & Status Agent", "type": "ai_languageModel", "index": 0},
+        {"node": "📝 Booking & Quotes Agent", "type": "ai_languageModel", "index": 0},
+        {"node": "⚠️ Claims & Complaints Agent", "type": "ai_languageModel", "index": 0},
+        {"node": "🛃 Customs Support Agent", "type": "ai_languageModel", "index": 0},
+        {"node": "🚛 Delivery Management Agent", "type": "ai_languageModel", "index": 0}
+      ]]
+    },
+    "🧠 Shared Memory": {
+      "ai_memory": [[
+        {"node": "📦 Tracking & Status Agent", "type": "ai_memory", "index": 0},
+        {"node": "📝 Booking & Quotes Agent", "type": "ai_memory", "index": 0},
+        {"node": "⚠️ Claims & Complaints Agent", "type": "ai_memory", "index": 0},
+        {"node": "🛃 Customs Support Agent", "type": "ai_memory", "index": 0},
+        {"node": "🚛 Delivery Management Agent", "type": "ai_memory", "index": 0}
+      ]]
+    },
+    "🔧 track_shipment": {
+      "ai_tool": [[{"node": "📦 Tracking & Status Agent", "type": "ai_tool", "index": 0}]]
+    },
+    "🔧 proof_of_delivery": {
+      "ai_tool": [[{"node": "📦 Tracking & Status Agent", "type": "ai_tool", "index": 0}]]
+    },
+    "🔧 proactive_guidance": {
+      "ai_tool": [[{"node": "📦 Tracking & Status Agent", "type": "ai_tool", "index": 0}]]
+    },
+    "🔧 recommend_service": {
+      "ai_tool": [[{"node": "📝 Booking & Quotes Agent", "type": "ai_tool", "index": 0}]]
+    },
+    "🔧 get_rate_quote": {
+      "ai_tool": [[{"node": "📝 Booking & Quotes Agent", "type": "ai_tool", "index": 0}]]
+    },
+    "🔧 create_booking": {
+      "ai_tool": [[{"node": "📝 Booking & Quotes Agent", "type": "ai_tool", "index": 0}]]
+    },
+    "🔧 file_claim": {
+      "ai_tool": [[{"node": "⚠️ Claims & Complaints Agent", "type": "ai_tool", "index": 0}]]
+    },
+    "🔧 compensation_policy": {
+      "ai_tool": [[{"node": "⚠️ Claims & Complaints Agent", "type": "ai_tool", "index": 0}]]
+    },
+    "🔧 customs_requirements": {
+      "ai_tool": [[{"node": "🛃 Customs Support Agent", "type": "ai_tool", "index": 0}]]
+    },
+    "🔧 estimate_duties": {
+      "ai_tool": [[{"node": "🛃 Customs Support Agent", "type": "ai_tool", "index": 0}]]
+    },
+    "🔧 reschedule_delivery": {
+      "ai_tool": [[{"node": "🚛 Delivery Management Agent", "type": "ai_tool", "index": 0}]]
+    },
+    "🔧 change_delivery_method": {
+      "ai_tool": [[{"node": "🚛 Delivery Management Agent", "type": "ai_tool", "index": 0}]]
+    },
+    "📦 Tracking & Status Agent": {
+      "main": [[{"node": "📊 Response + Audit Log", "type": "main", "index": 0}]]
+    },
+    "📝 Booking & Quotes Agent": {
+      "main": [[{"node": "📊 Response + Audit Log", "type": "main", "index": 0}]]
+    },
+    "⚠️ Claims & Complaints Agent": {
+      "main": [[{"node": "📊 Response + Audit Log", "type": "main", "index": 0}]]
+    },
+    "🛃 Customs Support Agent": {
+      "main": [[{"node": "📊 Response + Audit Log", "type": "main", "index": 0}]]
+    },
+    "🚛 Delivery Management Agent": {
+      "main": [[{"node": "📊 Response + Audit Log", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {"executionOrder": "v1"},
+  "meta": {"templateCredsSetupCompleted": false, "instanceId": "dhl-command-center"},
+  "pinData": {}
+}

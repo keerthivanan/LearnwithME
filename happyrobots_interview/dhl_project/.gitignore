@@ -1,0 +1,11 @@
+# Never commit real secrets
+.env
+*.local
+
+# n8n runtime / local data
+.n8n/
+audit_log.db
+
+# OS noise
+.DS_Store
+Thumbs.db
