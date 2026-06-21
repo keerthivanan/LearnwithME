@@ -10,7 +10,7 @@ import seaborn as sns
 
 df = pd.read_csv('data.csv')
 
-df.shape          # rows, columns
+df.shape          # rwows, columns
 df.dtypes         # data types
 df.describe()     # mean, std, min, max per column
 df.isnull().sum() # missing values per column

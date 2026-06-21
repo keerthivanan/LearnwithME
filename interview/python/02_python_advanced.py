@@ -372,7 +372,8 @@ print(running_product)  # [1, 2, 6, 24, 120]
 # BATCHED — split iterable into chunks (manual, since batched is Python 3.12)
 def batched(iterable, n):
     it = iter(iterable)
-    while batch := list(itertools.islice(it, n)):
+    while batch := list(itertools.islice(
+        it, n)):
         yield batch
 
 for batch in batched(range(10), 3):
