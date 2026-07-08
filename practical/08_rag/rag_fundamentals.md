@@ -148,7 +148,8 @@ vectorstore.save_local("faiss_index")  # saves to local folder called "faiss_ind
 
 ```python
 query = "What is the refund policy?"               # the user's question
-query_vector = embeddings.embed_query(query)        # embed the query — same model as documents
+query_vector = embeddings.embed_query(query)   
+     # embed the query — same model as documents
 results = vectorstore.similarity_search(query, k=5) # find 5 most similar chunks by vector similarity
 ```
 
